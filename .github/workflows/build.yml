@@ -59,7 +59,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
-          name: Lights Out 0.1.${{ github.run_number }}${{ steps.signing.outputs.signed != 'true' && ' (preview)' || '' }}
+          name: "Lights Out 0.1.${{ github.run_number }}${{ steps.signing.outputs.signed != 'true' && ' (preview)' || '' }}"
           target_commitish: ${{ github.sha }}
           files: lights-out.apk
-          body: ${{ steps.signing.outputs.signed == 'true' && 'Signed build. Installs over earlier signed builds.' || 'Preview build signed with a throwaway key: to install a later build you must uninstall this one first, which deletes your nights. Add the signing secrets (see README) before the challenge starts.' }}
+          body: "${{ steps.signing.outputs.signed == 'true' && 'Signed build. Installs over earlier signed builds.' || 'Preview build signed with a throwaway key. To install a later build you must uninstall this one first, which deletes your nights. Add the signing secrets (see README) before the challenge starts.' }}"
