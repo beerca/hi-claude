@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { Sessions.finalizeIfDue(applicationContext, System.currentTimeMillis()) }
+            LiveTracking.ensureRunning(this@MainActivity)
             refreshKey.intValue++
         }
     }

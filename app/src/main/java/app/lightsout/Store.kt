@@ -17,6 +17,8 @@ object Store {
     private const val KEY_MAX_NIGHT_HOURS = "max_night_hours"
     private const val KEY_LAST_WAKE_MINUTES = "last_manual_wake_minutes"
     private const val KEY_NOTIFICATIONS_SKIPPED = "notifications_skipped"
+    private const val KEY_USAGE_SKIPPED = "usage_access_skipped"
+    private const val KEY_BATTERY_SKIPPED = "battery_skipped"
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences("lightsout", Context.MODE_PRIVATE)
@@ -69,4 +71,13 @@ object Store {
     fun notificationsSkipped(context: Context): Boolean = prefs(context).getBoolean(KEY_NOTIFICATIONS_SKIPPED, false)
 
     fun skipNotifications(context: Context) = prefs(context).edit { putBoolean(KEY_NOTIFICATIONS_SKIPPED, true) }
+
+    /** The user chose live tracking instead of granting Usage access. */
+    fun usageAccessSkipped(context: Context): Boolean = prefs(context).getBoolean(KEY_USAGE_SKIPPED, false)
+
+    fun skipUsageAccess(context: Context) = prefs(context).edit { putBoolean(KEY_USAGE_SKIPPED, true) }
+
+    fun batterySkipped(context: Context): Boolean = prefs(context).getBoolean(KEY_BATTERY_SKIPPED, false)
+
+    fun skipBattery(context: Context) = prefs(context).edit { putBoolean(KEY_BATTERY_SKIPPED, true) }
 }

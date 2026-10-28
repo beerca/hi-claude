@@ -14,13 +14,18 @@ class SleepTileService : TileService() {
     override fun onClick() {
         val now = System.currentTimeMillis()
         Sessions.finalizeIfDue(this, now)
-        if (Store.activeSession(this) != null || !UsageAccess.granted(this)) {
+        if (Store.activeSession(this) != null) {
             openApp(null)
             return
         }
         when (val result = Sessions.startWithAlarm(this, Store.settings(this).defaultVideoCounts, now)) {
             is Sessions.StartResult.Started -> {
                 refresh()
+                // Android may not let a tile start the tracking service; opening the app does.
+                if (!result.trackingStarted) {
+                    openApp(null)
+                    return
+                }
                 Toast.makeText(this, "Good night. Counting until ${Format.clock(result.session.endMs)}", Toast.LENGTH_LONG)
                     .show()
             }

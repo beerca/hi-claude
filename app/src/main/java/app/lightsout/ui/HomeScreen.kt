@@ -52,9 +52,11 @@ import app.lightsout.ActiveSession
 import app.lightsout.Alarms
 import app.lightsout.Apps
 import app.lightsout.Format
+import app.lightsout.LiveTracking
 import app.lightsout.NightRecord
 import app.lightsout.Sessions
 import app.lightsout.Store
+import app.lightsout.TrackingMode
 import app.lightsout.UsageAccess
 import app.lightsout.core.Times
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +78,10 @@ fun HomeScreen(
     val session = remember(refreshKey) { Store.activeSession(context) }
     val nights = remember(refreshKey) { Store.nights(context) }
     val usageAccess = remember(refreshKey) { UsageAccess.granted(context) }
+    val usageSkipped = remember(refreshKey) { Store.usageAccessSkipped(context) }
+    val batteryNeeded = remember(refreshKey) {
+        !usageAccess && usageSkipped && !Store.batterySkipped(context) && !LiveTracking.batteryUnrestricted(context)
+    }
     val notificationsNeeded = remember(refreshKey) {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Store.notificationsSkipped(context) &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -107,11 +113,14 @@ fun HomeScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!usageAccess) {
-                item { UsageAccessCard() }
+            if (!usageAccess && !usageSkipped) {
+                item { UsageAccessCard(onChanged) }
+            }
+            if (batteryNeeded) {
+                item { BatteryCard(onChanged) }
             }
             if (notificationsNeeded) {
-                item { NotificationsCard(onChanged) }
+                item { NotificationsCard(liveTracking = !usageAccess, onChanged = onChanged) }
             }
             item {
                 if (session != null) {
@@ -121,7 +130,7 @@ fun HomeScreen(
                         nowMs = now,
                         maxNightMs = settings.maxNightMs,
                         videoCounts = settings.defaultVideoCounts,
-                        enabled = usageAccess,
+                        liveTracking = !usageAccess,
                         onVideoCountsChange = {
                             Store.saveSettings(context, settings.copy(defaultVideoCounts = it))
                             onChanged()
@@ -169,28 +178,65 @@ fun HomeScreen(
 }
 
 @Composable
-private fun UsageAccessCard() {
+private fun UsageAccessCard(onChanged: () -> Unit) {
     val context = LocalContext.current
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("One-time setup", style = MaterialTheme.typography.titleMedium)
+            Text("How should nights be tracked?", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Lights Out needs Usage access to see when your screen was on during the night. " +
-                    "Everything stays on this phone; only what you share leaves it.",
+                "With Usage access, Lights Out reads Android's screen history in the morning. It's the most " +
+                    "accurate option, knows which app was a video app, and runs nothing overnight.",
             )
-            Button(onClick = { UsageAccess.openSettings(context) }) { Text("Grant usage access") }
+            Text(
+                "Without it, a notification stays on overnight while the app records screen on/off itself. " +
+                    "Video then means \"something was playing audio while unlocked\".",
+            )
+            Text(
+                "Either way, everything stays on this phone; only what you share leaves it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { UsageAccess.openSettings(context) }) { Text("Grant usage access") }
+                TextButton(onClick = { Store.skipUsageAccess(context); onChanged() }) { Text("Track live") }
+            }
         }
     }
 }
 
 @Composable
-private fun NotificationsCard(onChanged: () -> Unit) {
+private fun BatteryCard(onChanged: () -> Unit) {
+    val context = LocalContext.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Keep live tracking running", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Some phones stop background apps at night. Let Lights Out run unrestricted so the night " +
+                    "isn't flagged as unmonitored. If yours still stops it, see dontkillmyapp.com for your phone.",
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { LiveTracking.requestBatteryUnrestricted(context) }) { Text("Allow") }
+                TextButton(onClick = { Store.skipBattery(context); onChanged() }) { Text("Not now") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationsCard(liveTracking: Boolean, onChanged: () -> Unit) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { onChanged() }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Morning summary", style = MaterialTheme.typography.titleMedium)
-            Text("Allow notifications to get your result shortly after your alarm.")
+            Text(
+                if (liveTracking) {
+                    "Allow notifications to see the overnight tracking notification (with an \"I'm up\" button) " +
+                        "and get your result shortly after your alarm."
+                } else {
+                    "Allow notifications to get your result shortly after your alarm."
+                },
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -208,7 +254,7 @@ private fun StartCard(
     nowMs: Long,
     maxNightMs: Long,
     videoCounts: Boolean,
-    enabled: Boolean,
+    liveTracking: Boolean,
     onVideoCountsChange: (Boolean) -> Unit,
     onStart: () -> Unit,
 ) {
@@ -236,7 +282,14 @@ private fun StartCard(
                 }
                 Switch(checked = videoCounts, onCheckedChange = onVideoCountsChange)
             }
-            Button(onClick = onStart, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
+            if (liveTracking) {
+                Text(
+                    "Live tracking: a notification stays on overnight. Video means audio playing while unlocked.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) {
                 Text("Start sleeping")
             }
             Text(
@@ -264,7 +317,8 @@ private fun ActiveCard(session: ActiveSession, nowMs: Long, usageAccess: Boolean
                 Text("Counting starts at ${Format.clock(session.countedStartMs)} (max night length).")
             }
             Text("Video ${if (session.videoCounts) "counts" else "doesn't count"} tonight.")
-            if (nowMs >= session.endMs && !usageAccess) {
+            if (session.mode == TrackingMode.LIVE) Text("Live tracking: keep the notification.")
+            if (session.mode == TrackingMode.USAGE && nowMs >= session.endMs && !usageAccess) {
                 Text("Grant usage access to compute this night.", color = MaterialTheme.colorScheme.error)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -316,6 +370,14 @@ private fun NightCard(night: NightRecord, onShare: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Format.tracking(night)?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (night.unmonitoredMs > 0) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             if (expanded) {
                 Spacer(Modifier.height(4.dp))
                 if (night.segments.isEmpty()) Text("No screen time at all.")

@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import app.lightsout.core.EventType
+import app.lightsout.core.Gaps
 import app.lightsout.core.SegmentKind
 import app.lightsout.core.UsageAnalyzer
 import java.util.concurrent.TimeUnit
 
-/** Starting, adjusting and finishing nights. Synchronized: the UI, tile, receiver and worker all call in. */
+/** Starting, adjusting and finishing nights. Synchronized: the UI, tile, receivers, service and worker all call in. */
 object Sessions {
     private const val FINALIZE_WORK = "finalize-night"
     private const val MINUTE_MS = 60_000L
@@ -17,7 +19,8 @@ object Sessions {
     private const val LOOKBACK_MS = 3 * 3_600_000L
 
     sealed interface StartResult {
-        data class Started(val session: ActiveSession) : StartResult
+        /** [trackingStarted] is false if live tracking couldn't start from here (e.g. from the tile). */
+        data class Started(val session: ActiveSession, val trackingStarted: Boolean) : StartResult
         data object NeedsWakeTime : StartResult
     }
 
@@ -27,13 +30,11 @@ object Sessions {
         finalizeIfDue(context, nowMs)
         val settings = Store.settings(context)
         val alarm = Alarms.nextUsable(context, nowMs, settings.maxNightMs) ?: return StartResult.NeedsWakeTime
-        return StartResult.Started(
-            start(context, nowMs, alarm.triggerMs, WakeSource.ALARM, alarm.packageName, videoCounts, settings)
-        )
+        return start(context, nowMs, alarm.triggerMs, WakeSource.ALARM, alarm.packageName, videoCounts, settings)
     }
 
     @Synchronized
-    fun startWithWakeTime(context: Context, wakeMs: Long, videoCounts: Boolean, nowMs: Long): ActiveSession {
+    fun startWithWakeTime(context: Context, wakeMs: Long, videoCounts: Boolean, nowMs: Long): StartResult.Started {
         finalizeIfDue(context, nowMs)
         return start(context, nowMs, wakeMs, WakeSource.MANUAL, null, videoCounts, Store.settings(context))
     }
@@ -46,7 +47,7 @@ object Sessions {
         alarmPackage: String?,
         videoCounts: Boolean,
         settings: Settings,
-    ): ActiveSession {
+    ): StartResult.Started {
         val session = ActiveSession(
             startMs = nowMs,
             endMs = endMs,
@@ -56,17 +57,27 @@ object Sessions {
             videoPackages = settings.videoPackages,
             glanceThresholdMs = settings.glanceSeconds * 1_000L,
             maxNightMs = settings.maxNightMs,
+            mode = if (UsageAccess.granted(context)) TrackingMode.USAGE else TrackingMode.LIVE,
         )
         Store.setActiveSession(context, session)
         scheduleFinalize(context, session.endMs, nowMs)
         Tile.refresh(context)
-        return session
+        val trackingStarted = when (session.mode) {
+            TrackingMode.USAGE -> true
+            TrackingMode.LIVE -> {
+                LiveLog.clear(context)
+                LiveTracking.start(context)
+            }
+        }
+        return StartResult.Started(session, trackingStarted)
     }
 
     @Synchronized
     fun cancel(context: Context) {
         Store.setActiveSession(context, null)
         WorkManager.getInstance(context).cancelUniqueWork(FINALIZE_WORK)
+        LiveTracking.stop(context)
+        LiveLog.clear(context)
         Tile.refresh(context)
     }
 
@@ -105,19 +116,37 @@ object Sessions {
         }
         Store.setActiveSession(context, updated)
         scheduleFinalize(context, updated.endMs, nowMs)
+        if (updated.mode == TrackingMode.LIVE) LiveTracking.updateNotification(context, updated)
         Tile.refresh(context)
     }
 
     /**
      * Computes and stores the night once its end has passed. Returns null if there is nothing to
-     * finalize yet, or usage access is missing (the night then stays pending).
+     * finalize yet, or a usage-tracked night lacks usage access (it then stays pending).
      */
     @Synchronized
     fun finalizeIfDue(context: Context, nowMs: Long): NightRecord? {
         val session = Store.activeSession(context) ?: return null
-        if (nowMs < session.endMs || !UsageAccess.granted(context)) return null
+        if (nowMs < session.endMs) return null
         val from = session.countedStartMs
-        val events = UsageAccess.events(context, from - LOOKBACK_MS, session.endMs)
+        val events = when (session.mode) {
+            TrackingMode.USAGE -> {
+                if (!UsageAccess.granted(context)) return null
+                UsageAccess.events(context, from - LOOKBACK_MS, session.endMs)
+            }
+            TrackingMode.LIVE -> LiveLog.read(context)
+        }
+        val unmonitoredMs = when (session.mode) {
+            TrackingMode.USAGE -> 0L
+            TrackingMode.LIVE -> Gaps.unmonitoredMs(
+                windowStartMs = from,
+                windowEndMs = session.endMs,
+                sessionStartMs = session.startMs,
+                recordedMs = events.map { it.timeMs },
+                serviceStartsMs = events.filter { it.type == EventType.SERVICE_STARTED }.map { it.timeMs },
+                deathsMs = LiveTracking.processDeaths(context, session.startMs, session.endMs),
+            )
+        }
         val analysis = UsageAnalyzer.analyze(
             events, from, session.endMs, session.videoPackages, session.glanceThresholdMs,
         )
@@ -127,11 +156,22 @@ object Sessions {
             videoMs = analysis.totalMs(SegmentKind.VIDEO),
             glanceMs = analysis.totalMs(SegmentKind.GLANCE),
             segments = analysis.segments,
+            unmonitoredMs = unmonitoredMs,
         )
         Store.addNight(context, night)
         Store.setActiveSession(context, null)
+        if (session.mode == TrackingMode.LIVE) {
+            LiveTracking.stop(context)
+            LiveLog.clear(context)
+        }
         Tile.refresh(context)
         return night
+    }
+
+    /** Finalizes in the background as soon as possible (the night's end has passed). */
+    fun finalizeSoon(context: Context) {
+        val request = OneTimeWorkRequestBuilder<FinalizeWorker>().build()
+        WorkManager.getInstance(context).enqueueUniqueWork(FINALIZE_WORK, ExistingWorkPolicy.REPLACE, request)
     }
 
     private fun scheduleFinalize(context: Context, endMs: Long, nowMs: Long) {

@@ -11,8 +11,9 @@ Everything is computed and stored on the phone. Only the summary text you choose
    Don't use the files attached to workflow runs: they need a GitHub login and come zipped.
 2. Open the APK. Android asks you to allow installing from your browser (or Obtainium); allow it.
 3. Open **Lights Out** and follow the setup cards:
-   - **Usage access** (required): lets the app read when the screen was on.
-   - **Notifications** (optional): your result shortly after your alarm.
+   - **Tracking:** grant **Usage access** (recommended), or choose **Track live** if your phone won't allow it. See [Two tracking modes](#two-tracking-modes).
+   - **Notifications** (optional): your result shortly after your alarm, and the overnight notification in live mode.
+   - **Battery** (live mode only): let the app run unrestricted so your phone doesn't stop it at night.
 4. Settings → **Add Quick Settings tile**, so bedtime is one tap.
 5. Agree with your friend on the same settings (glance threshold, max night length, video apps).
 
@@ -20,8 +21,8 @@ Everything is computed and stored on the phone. Only the summary text you choose
 
 - **Start:** tap the tile (or "Start sleeping" in the app). The end of the night is your next alarm, as set in the Clock app or any alarm app that shows in the status bar.
 - **No alarm found** (none set, or the next one is further away than the max night length, e.g. Friday night with weekday alarms): the app asks when you expect to wake up. Tapping the tile opens that prompt.
-- **During the night** nothing runs in the background. If you change your alarm, the night follows the first alarm: an earlier alarm moves the end forward, a moved alarm moves it back, and dismissing the upcoming alarm ends the night at that moment. "I'm up" ends it early.
-- **Morning:** shortly after the alarm, the app reads Android's usage history for the night and computes:
+- **During the night** nothing runs in the background with Usage access; in live mode a notification stays on. If you change your alarm, the night follows the first alarm: an earlier alarm moves the end forward, a moved alarm moves it back, and dismissing the upcoming alarm ends the night at that moment. "I'm up" ends it early.
+- **Morning:** shortly after the alarm, the app goes through the night's screen events and computes:
 
   ```
   attempted = (wake − start) − screen use − (video, unless it counts tonight)
@@ -32,7 +33,7 @@ Everything is computed and stored on the phone. Only the summary text you choose
   | Off | sleep attempt |
   | Lock screen on for less than the glance threshold (default 30 s), e.g. checking the time | sleep attempt (shown as "glance") |
   | Lock screen on for longer | screen use |
-  | Unlocked, a video app in front | video |
+  | Unlocked, a video app in front (live mode: audio playing) | video |
   | Unlocked, any other app | screen use |
 
   The screen-on time right after you tap "start" counts as screen use, so the night effectively starts when the screen goes dark.
@@ -49,12 +50,29 @@ Everything is computed and stored on the phone. Only the summary text you choose
   7-night average: 7h 01m
   ```
 
+  Live-mode nights add a line such as `Live tracking · ⚠ 1h 05m unmonitored (app was stopped)`.
+
+## Two tracking modes
+
+The mode is picked when a night starts: **usage** if Usage access is granted, **live** otherwise. Shared summaries of live nights say so, since the two aren't equally precise.
+
+| | Usage access | Live tracking |
+| --- | --- | --- |
+| Setup | Settings → Usage access (some phones restrict this for apps not from the Play Store) | Nothing special; allow notifications and unrestricted battery |
+| Overnight | Nothing runs | A notification stays on (with an "I'm up" button) |
+| Video | Time in apps on your video list | Unlocked while something plays audio |
+| If something goes wrong | Usage history is kept by Android for a few days, so the night can be computed later | If your phone stops the app, the time until it restarts is counted but flagged "unmonitored" in the result and summary |
+
+If Usage access is greyed out, try Settings → Apps → Lights Out → ⋮ → **Allow restricted settings**, or grant it once from a computer with `adb shell appops set app.lightsout GET_USAGE_STATS allow`.
+
+Live tracking listens for screen on/off and unlock events, and checks whether audio is playing every 10 s while the phone is unlocked (it never keeps the phone awake). Missed events can't be recovered: unmonitored time is detected when Android restarts the app (and, from Android 11, from Android's record of when the app was stopped). It's counted as sleep attempt because the phone is usually idle then, but it's flagged so your challenge partner can see it.
+
 ## Limitations
 
 - **Honor system.** The app can't tell whether you actually tried to sleep, only that your phone was idle. Watching TV or reading a book counts as an attempt. Starting hours before the alarm is only limited by the max night length.
-- **Video means "a video app is in front"**, not "a video is playing". Scrolling YouTube Shorts counts as video; YouTube paused while you read comments still counts as video.
+- **Video means "a video app is in front"** (usage mode), not "a video is playing". Scrolling YouTube Shorts counts as video; YouTube paused while you read comments still counts as video. In live mode it means "audio playing while unlocked": music while scrolling counts as video, a muted video doesn't.
 - **Alarm detection** covers alarms set with Android's alarm-clock API (Google Clock, Samsung Clock and most alarm apps). Some apps, e.g. reminder or automation apps, also use it; the start screen shows which app the alarm comes from. An alarm app that doesn't use it isn't seen, so you'd be asked for a time instead.
-- **Usage history is kept by Android for a few days.** If a night can't be computed (usage access revoked), open the app within a day or two of granting access again.
+- **Usage history is kept by Android for a few days.** If a usage-mode night can't be computed (usage access revoked), open the app within a day or two of granting access again.
 - Lock and unlock events are recorded from Android 9. If a phone doesn't record them, all screen-on time counts as screen use, including glances.
 
 ## Signing key (one-time, for the repository owner)

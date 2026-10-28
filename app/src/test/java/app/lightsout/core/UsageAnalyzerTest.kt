@@ -116,6 +116,25 @@ class UsageAnalyzerTest {
     }
 
     @Test
+    fun liveTrackingMediaWhileUnlockedIsVideo() {
+        val t = start + 30 * min
+        val a = analyze(
+            *lockAt(start),
+            ev(t, SCREEN_INTERACTIVE),
+            ev(t, KEYGUARD_HIDDEN),
+            ev(t + 2 * min, EventType.MEDIA_STARTED),
+            *lockAt(t + 20 * min), // media keeps playing with the screen off: not video
+            ev(t + 60 * min, SCREEN_INTERACTIVE),
+            ev(t + 60 * min, KEYGUARD_HIDDEN),
+            ev(t + 61 * min, EventType.MEDIA_STOPPED),
+            *lockAt(t + 65 * min),
+        )
+        assertEquals(18 * min + 1 * min, a.totalMs(SegmentKind.VIDEO))
+        assertEquals(2 * min + 4 * min, a.totalMs(SegmentKind.SCREEN_USE))
+        assertEquals(null, a.segments.first { it.kind == SegmentKind.VIDEO }.packageName)
+    }
+
+    @Test
     fun zeroThresholdCountsEveryLockScreenWake() {
         val a = analyze(
             *lockAt(start - min),

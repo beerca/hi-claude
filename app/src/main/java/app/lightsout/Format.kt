@@ -37,6 +37,12 @@ object Format {
         return "Screen use −${duration(night.screenUseMs)} · video ${duration(night.videoMs)} $video"
     }
 
+    fun tracking(night: NightRecord): String? = when {
+        night.session.mode == TrackingMode.USAGE -> null
+        night.unmonitoredMs > 0 -> "Live tracking · ⚠ ${duration(night.unmonitoredMs)} unmonitored (app was stopped)"
+        else -> "Live tracking"
+    }
+
     fun segmentKind(kind: SegmentKind): String = when (kind) {
         SegmentKind.SCREEN_USE -> "Screen use"
         SegmentKind.VIDEO -> "Video"
@@ -57,6 +63,7 @@ object Format {
             "${clock(night.session.startMs)} → ${clock(night.session.endMs)} (${wake(context, night.session)})" +
             clipped + "\n" +
             breakdown(night) +
+            (tracking(night)?.let { "\n$it" } ?: "") +
             average
     }
 }

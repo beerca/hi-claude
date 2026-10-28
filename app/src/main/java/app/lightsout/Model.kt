@@ -10,6 +10,12 @@ enum class WakeSource { ALARM, MANUAL }
 enum class EndReason { PLANNED, ALARM_DISMISSED, WOKE_UP }
 
 /**
+ * USAGE reads Android's usage history in the morning (needs Usage access). LIVE records screen
+ * events overnight with a foreground service, for when Usage access isn't granted.
+ */
+enum class TrackingMode { USAGE, LIVE }
+
+/**
  * A night in progress. Settings that affect the score are copied in at start, so changing them
  * in the morning can't rewrite the night.
  */
@@ -23,6 +29,7 @@ data class ActiveSession(
     val glanceThresholdMs: Long,
     val maxNightMs: Long,
     val endReason: EndReason = EndReason.PLANNED,
+    val mode: TrackingMode = TrackingMode.USAGE,
 ) {
     /** Time before this isn't counted, so tapping "start" hours early doesn't pay off. */
     val countedStartMs: Long get() = maxOf(startMs, endMs - maxNightMs)
@@ -34,6 +41,8 @@ data class NightRecord(
     val videoMs: Long,
     val glanceMs: Long,
     val segments: List<Segment>,
+    /** Live tracking only: time the tracking service wasn't running. Counted, but flagged. */
+    val unmonitoredMs: Long = 0,
 ) {
     val windowMs: Long get() = (session.endMs - session.countedStartMs).coerceAtLeast(0)
     val attemptedMs: Long
@@ -72,6 +81,7 @@ internal fun ActiveSession.toJson(): JSONObject = JSONObject()
     .put("glanceThresholdMs", glanceThresholdMs)
     .put("maxNightMs", maxNightMs)
     .put("endReason", endReason.name)
+    .put("mode", mode.name)
 
 internal fun activeSessionFromJson(o: JSONObject) = ActiveSession(
     startMs = o.getLong("startMs"),
@@ -83,6 +93,7 @@ internal fun activeSessionFromJson(o: JSONObject) = ActiveSession(
     glanceThresholdMs = o.getLong("glanceThresholdMs"),
     maxNightMs = o.getLong("maxNightMs"),
     endReason = EndReason.valueOf(o.getString("endReason")),
+    mode = TrackingMode.valueOf(o.optString("mode", TrackingMode.USAGE.name)),
 )
 
 internal fun NightRecord.toJson(): JSONObject = JSONObject()
@@ -90,6 +101,7 @@ internal fun NightRecord.toJson(): JSONObject = JSONObject()
     .put("screenUseMs", screenUseMs)
     .put("videoMs", videoMs)
     .put("glanceMs", glanceMs)
+    .put("unmonitoredMs", unmonitoredMs)
     .put("segments", JSONArray().apply {
         segments.forEach {
             put(
@@ -109,6 +121,7 @@ internal fun nightRecordFromJson(o: JSONObject): NightRecord {
         screenUseMs = o.getLong("screenUseMs"),
         videoMs = o.getLong("videoMs"),
         glanceMs = o.getLong("glanceMs"),
+        unmonitoredMs = o.optLong("unmonitoredMs", 0),
         segments = (0 until segments.length()).map { i ->
             val s = segments.getJSONObject(i)
             Segment(s.getLong("s"), s.getLong("e"), SegmentKind.valueOf(s.getString("k")), s.optStringOrNull("p"))

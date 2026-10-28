@@ -155,7 +155,8 @@ fun VideoAppsScreen(onBack: () -> Unit) {
             item {
                 Text(
                     "Screen time in these apps counts as video. Whether video counts towards your sleep " +
-                        "attempt is chosen each night.",
+                        "attempt is chosen each night. This list needs Usage access; with live tracking, video " +
+                        "means audio playing while the phone is unlocked.",
                     Modifier.padding(16.dp),
                     style = MaterialTheme.typography.bodySmall,
                 )

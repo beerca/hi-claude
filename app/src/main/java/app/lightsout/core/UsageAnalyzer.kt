@@ -15,6 +15,11 @@ object EventType {
     const val DEVICE_SHUTDOWN = 26
     const val DEVICE_STARTUP = 27
 
+    // Synthetic events recorded by live tracking; not Android usage event types.
+    const val MEDIA_STARTED = 1001
+    const val MEDIA_STOPPED = 1002
+    const val SERVICE_STARTED = 1003
+
     val RELEVANT = setOf(
         ACTIVITY_RESUMED, ACTIVITY_PAUSED, SCREEN_INTERACTIVE, SCREEN_NON_INTERACTIVE,
         KEYGUARD_SHOWN, KEYGUARD_HIDDEN, ACTIVITY_STOPPED, DEVICE_SHUTDOWN, DEVICE_STARTUP,
@@ -27,7 +32,10 @@ enum class SegmentKind {
     /** Unlocked phone, or lock screen on for at least the glance threshold. Subtracted. */
     SCREEN_USE,
 
-    /** Unlocked with a video app in the foreground. Subtracted unless video counts tonight. */
+    /**
+     * Unlocked with a video app in the foreground, or (live tracking) with media playing.
+     * Subtracted unless video counts tonight.
+     */
     VIDEO,
 
     /** Short lock-screen wake (checking the time, a notification lighting up). Not subtracted. */
@@ -99,6 +107,7 @@ object UsageAnalyzer {
         var interactive = true
         var locked = false
         var foreground: String? = null
+        var mediaPlaying = false
 
         fun apply(event: RawEvent) {
             when (event.type) {
@@ -110,10 +119,13 @@ object UsageAnalyzer {
                 // The next app's RESUMED can arrive before the previous app's PAUSED.
                 EventType.ACTIVITY_PAUSED, EventType.ACTIVITY_STOPPED ->
                     if (event.packageName == foreground) foreground = null
+                EventType.MEDIA_STARTED -> mediaPlaying = true
+                EventType.MEDIA_STOPPED -> mediaPlaying = false
                 EventType.DEVICE_SHUTDOWN, EventType.DEVICE_STARTUP -> {
                     interactive = false
                     locked = true
                     foreground = null
+                    mediaPlaying = false
                 }
             }
         }
@@ -122,6 +134,7 @@ object UsageAnalyzer {
             !interactive -> null
             locked -> Piece(startMs, endMs, PieceKind.LOCKED, null)
             foreground in videoPackages -> Piece(startMs, endMs, PieceKind.VIDEO, foreground)
+            mediaPlaying -> Piece(startMs, endMs, PieceKind.VIDEO, null)
             else -> Piece(startMs, endMs, PieceKind.UNLOCKED, foreground)
         }
     }
