@@ -130,7 +130,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenVideoApps: () -> Unit) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 Button(onClick = { requestTile(context) }) { Text("Add Quick Settings tile") }
             } else {
-                Text("To add the tile: swipe down twice, tap the pencil, and drag \"Lights Out\" into place.")
+                Text("To add the tile: swipe down twice, tap the pencil, and drag \"Abinsbetti\" into place.")
             }
             OutlinedButton(onClick = { UsageAccess.openSettings(context) }) { Text("Usage access settings") }
         }

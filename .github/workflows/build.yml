@@ -44,22 +44,22 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release.apk lights-out.apk
+        run: mv app/build/outputs/apk/release/app-release.apk abinsbetti.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lights-out-apk
-          path: lights-out.apk
+          name: abinsbetti-apk
+          path: abinsbetti.apk
 
       # Releases are what you and your friend install from (directly or via Obtainium).
       # Releases give a direct APK link that works on a phone without a GitHub login:
-      # https://github.com/<owner>/<repo>/releases/latest/download/lights-out.apk
+      # https://github.com/<owner>/<repo>/releases/latest/download/abinsbetti.apk
       - name: Publish release
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
-          name: "Lights Out 0.1.${{ github.run_number }}${{ steps.signing.outputs.signed != 'true' && ' (preview)' || '' }}"
+          name: "Abinsbetti 0.1.${{ github.run_number }}${{ steps.signing.outputs.signed != 'true' && ' (preview)' || '' }}"
           target_commitish: ${{ github.sha }}
-          files: lights-out.apk
+          files: abinsbetti.apk
           body: "${{ steps.signing.outputs.signed == 'true' && 'Signed build. Installs over earlier signed builds.' || 'Preview build signed with a throwaway key. To install a later build you must uninstall this one first, which deletes your nights. Add the signing secrets (see README) before the challenge starts.' }}"

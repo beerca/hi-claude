@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "LightsOut"
+rootProject.name = "Abinsbetti"
 include(":app")

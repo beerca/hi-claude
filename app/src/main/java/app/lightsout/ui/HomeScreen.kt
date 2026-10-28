@@ -98,7 +98,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lights Out") },
+                title = { Text("Abinsbetti") },
                 actions = {
                     IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
                 },
@@ -184,7 +184,7 @@ private fun UsageAccessCard(onChanged: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("How should nights be tracked?", style = MaterialTheme.typography.titleMedium)
             Text(
-                "With Usage access, Lights Out reads Android's screen history in the morning. It's the most " +
+                "With Usage access, Abinsbetti reads Android's screen history in the morning. It's the most " +
                     "accurate option, knows which app was a video app, and runs nothing overnight.",
             )
             Text(
@@ -211,7 +211,7 @@ private fun BatteryCard(onChanged: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Keep live tracking running", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Some phones stop background apps at night. Let Lights Out run unrestricted so the night " +
+                "Some phones stop background apps at night. Let Abinsbetti run unrestricted so the night " +
                     "isn't flagged as unmonitored. If yours still stops it, see dontkillmyapp.com for your phone.",
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -293,7 +293,7 @@ private fun StartCard(
                 Text("Start sleeping")
             }
             Text(
-                "Tip: add the Lights Out tile to Quick Settings (see Settings) to start with one tap.",
+                "Tip: add the Abinsbetti tile to Quick Settings (see Settings) to start with one tap.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

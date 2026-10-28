@@ -1,4 +1,4 @@
-# Lights Out
+# Abinsbetti
 
 An Android app for a sleep challenge between friends. It tracks **attempted sleep time**: from the moment you tap "start" at bedtime until your first alarm, minus the time you spent on your phone. You choose each night whether video watching counts.
 
@@ -6,11 +6,11 @@ Everything is computed and stored on the phone. Only the summary text you choose
 
 ## Install (you and your friend)
 
-1. On the phone, open **https://github.com/beerca/hi-claude/releases/latest/download/lights-out.apk** (no GitHub account needed).
+1. On the phone, open **https://github.com/beerca/hi-claude/releases/latest/download/abinsbetti.apk** (no GitHub account needed).
    To get updates automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium) instead.
    Don't use the files attached to workflow runs: they need a GitHub login and come zipped.
 2. Open the APK. Android asks you to allow installing from your browser (or Obtainium); allow it.
-3. Open **Lights Out** and follow the setup cards:
+3. Open **Abinsbetti** and follow the setup cards:
    - **Tracking:** grant **Usage access** (recommended), or choose **Track live** if your phone won't allow it. See [Two tracking modes](#two-tracking-modes).
    - **Notifications** (optional): your result shortly after your alarm, and the overnight notification in live mode.
    - **Battery** (live mode only): let the app run unrestricted so your phone doesn't stop it at night.
@@ -63,7 +63,7 @@ The mode is picked when a night starts: **usage** if Usage access is granted, **
 | Video | Time in apps on your video list | Unlocked while something plays audio |
 | If something goes wrong | Usage history is kept by Android for a few days, so the night can be computed later | If your phone stops the app, the time until it restarts is counted but flagged "unmonitored" in the result and summary |
 
-If Usage access is greyed out, try Settings → Apps → Lights Out → ⋮ → **Allow restricted settings**, or grant it once from a computer with `adb shell appops set app.lightsout GET_USAGE_STATS allow`.
+If Usage access is greyed out, try Settings → Apps → Abinsbetti → ⋮ → **Allow restricted settings**, or grant it once from a computer with `adb shell appops set app.lightsout GET_USAGE_STATS allow`.
 
 Live tracking listens for screen on/off and unlock events, and checks whether audio is playing every 10 s while the phone is unlocked (it never keeps the phone awake). Missed events can't be recovered: unmonitored time is detected when Android restarts the app (and, from Android 11, from Android's record of when the app was stopped). It's counted as sleep attempt because the phone is usually idle then, but it's flagged so your challenge partner can see it.
 
@@ -80,9 +80,9 @@ Live tracking listens for screen on/off and unlock events, and checks whether au
 Android only installs an update over an existing app if both are signed with the same key. Until you add your own key, releases are marked "(preview)" and signed with a throwaway key, so installing a newer one means uninstalling first, which deletes your nights. Set this up before the challenge starts:
 
 ```sh
-keytool -genkeypair -v -keystore lights-out.jks -alias lightsout \
+keytool -genkeypair -v -keystore abinsbetti.jks -alias abinsbetti \
   -keyalg RSA -keysize 4096 -validity 10000
-base64 -w0 lights-out.jks   # macOS: base64 -i lights-out.jks
+base64 -w0 abinsbetti.jks   # macOS: base64 -i abinsbetti.jks
 ```
 
 Add these under the repository's Settings → Secrets and variables → Actions:
@@ -91,10 +91,10 @@ Add these under the repository's Settings → Secrets and variables → Actions:
 | --- | --- |
 | `KEYSTORE_BASE64` | output of the `base64` command |
 | `KEYSTORE_PASSWORD` | the keystore password you chose |
-| `KEY_ALIAS` | `lightsout` |
+| `KEY_ALIAS` | `abinsbetti` |
 | `KEY_PASSWORD` | the key password (same as the keystore password unless you set another) |
 
-Keep `lights-out.jks` somewhere safe. Then re-run the **Build APK** workflow or push to the default branch: each push to the default branch publishes a release. Uninstall any preview build once before installing the first signed one.
+Keep `abinsbetti.jks` somewhere safe. Then re-run the **Build APK** workflow or push to the default branch: each push to the default branch publishes a release. Uninstall any preview build once before installing the first signed one.
 
 ## Development
 
