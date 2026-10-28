@@ -6,8 +6,9 @@ Everything is computed and stored on the phone. Only the summary text you choose
 
 ## Install (you and your friend)
 
-1. Open the latest [release](../../releases) on the phone and download `lights-out.apk`.
+1. On the phone, open **https://github.com/beerca/hi-claude/releases/latest/download/lights-out.apk** (no GitHub account needed).
    To get updates automatically, add this repository to [Obtainium](https://github.com/ImranR98/Obtainium) instead.
+   Don't use the files attached to workflow runs: they need a GitHub login and come zipped.
 2. Open the APK. Android asks you to allow installing from your browser (or Obtainium); allow it.
 3. Open **Lights Out** and follow the setup cards:
    - **Usage access** (required): lets the app read when the screen was on.
@@ -58,7 +59,7 @@ Everything is computed and stored on the phone. Only the summary text you choose
 
 ## Signing key (one-time, for the repository owner)
 
-Android only installs an update over an existing app if both are signed with the same key. The workflow only publishes releases signed with your own key:
+Android only installs an update over an existing app if both are signed with the same key. Until you add your own key, releases are marked "(preview)" and signed with a throwaway key, so installing a newer one means uninstalling first, which deletes your nights. Set this up before the challenge starts:
 
 ```sh
 keytool -genkeypair -v -keystore lights-out.jks -alias lightsout \
@@ -75,7 +76,7 @@ Add these under the repository's Settings → Secrets and variables → Actions:
 | `KEY_ALIAS` | `lightsout` |
 | `KEY_PASSWORD` | the key password (same as the keystore password unless you set another) |
 
-Keep `lights-out.jks` somewhere safe. Then re-run the **Build APK** workflow or push to the default branch: each push to the default branch publishes a release. Builds without the secrets still produce a downloadable artifact on the workflow run, signed with a throwaway key, which is fine for testing but can't be updated in place.
+Keep `lights-out.jks` somewhere safe. Then re-run the **Build APK** workflow or push to the default branch: each push to the default branch publishes a release. Uninstall any preview build once before installing the first signed one.
 
 ## Development
 

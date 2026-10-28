@@ -30,7 +30,7 @@ jobs:
             echo "SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::No KEYSTORE_BASE64 secret: the APK is signed with a throwaway debug key and no release is published. See README, 'Signing key'."
+            echo "::warning::No KEYSTORE_BASE64 secret: the APK is signed with a throwaway debug key, so the release is a preview that can't be updated in place. See README, 'Signing key'."
             echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -52,12 +52,14 @@ jobs:
           path: lights-out.apk
 
       # Releases are what you and your friend install from (directly or via Obtainium).
-      # Only properly signed builds are published, so updates always install over the old version.
+      # Releases give a direct APK link that works on a phone without a GitHub login:
+      # https://github.com/<owner>/<repo>/releases/latest/download/lights-out.apk
       - name: Publish release
-        if: steps.signing.outputs.signed == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
-          name: Lights Out 0.1.${{ github.run_number }}
+          name: Lights Out 0.1.${{ github.run_number }}${{ steps.signing.outputs.signed != 'true' && ' (preview)' || '' }}
           target_commitish: ${{ github.sha }}
           files: lights-out.apk
+          body: ${{ steps.signing.outputs.signed == 'true' && 'Signed build. Installs over earlier signed builds.' || 'Preview build signed with a throwaway key: to install a later build you must uninstall this one first, which deletes your nights. Add the signing secrets (see README) before the challenge starts.' }}
