@@ -40,6 +40,7 @@ Everything is computed and stored on the phone. Only the summary text you choose
 
 - **Video toggle:** set on the start screen and locked once the night starts. The video app list and other settings are copied into the night at start, so editing them in the morning can't change a finished night.
 - **Max night length** (default 12 h): time earlier than this before the wake-up time isn't counted. Tapping start at 20:00 for a 07:00 alarm counts from 19:00. Alarms further away than this are treated as no alarm.
+- **History:** entries are grouped by night, which runs from noon to noon. Tapping "I'm up" at 2:00 and starting again at 2:30 gives one night with two entries; its attempted sleep is the sum, and averages are per night. Tap a night to see its screen-time details and delete individual entries (e.g. one started by accident).
 - **Share:** each past night has a share button that produces a summary like:
 
   ```
@@ -69,7 +70,7 @@ Live tracking listens for screen on/off and unlock events, and checks whether au
 
 ## Limitations
 
-- **Honor system.** The app can't tell whether you actually tried to sleep, only that your phone was idle. Watching TV or reading a book counts as an attempt. Starting hours before the alarm is only limited by the max night length.
+- **Honor system.** The app can't tell whether you actually tried to sleep, only that your phone was idle. Watching TV or reading a book counts as an attempt. Starting hours before the alarm is only limited by the max night length, which applies per entry. Deleted entries leave no trace, so deleting a bad night is also on your honor.
 - **Video means "a video app is in front"** (usage mode), not "a video is playing". Scrolling YouTube Shorts counts as video; YouTube paused while you read comments still counts as video. In live mode it means "audio playing while unlocked": music while scrolling counts as video, a muted video doesn't.
 - **Alarm detection** covers alarms set with Android's alarm-clock API (Google Clock, Samsung Clock and most alarm apps). Some apps, e.g. reminder or automation apps, also use it; the start screen shows which app the alarm comes from. An alarm app that doesn't use it isn't seen, so you'd be asked for a time instead.
 - **Usage history is kept by Android for a few days.** If a usage-mode night can't be computed (usage access revoked), open the app within a day or two of granting access again.

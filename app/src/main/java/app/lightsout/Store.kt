@@ -43,6 +43,17 @@ object Store {
         prefs(context).edit(commit = true) { putString(KEY_NIGHTS, array.toString()) }
     }
 
+    /** Removes the entry that started at [startMs]. */
+    fun deleteNight(context: Context, startMs: Long) {
+        val array = JSONArray(prefs(context).getString(KEY_NIGHTS, "[]"))
+        val kept = JSONArray()
+        for (i in 0 until array.length()) {
+            val night = array.getJSONObject(i)
+            if (night.getJSONObject("session").getLong("startMs") != startMs) kept.put(night)
+        }
+        prefs(context).edit(commit = true) { putString(KEY_NIGHTS, kept.toString()) }
+    }
+
     fun settings(context: Context): Settings {
         val p = prefs(context)
         return Settings(

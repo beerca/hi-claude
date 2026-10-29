@@ -3,6 +3,7 @@ package app.lightsout
 import android.content.Context
 import app.lightsout.core.SegmentKind
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -18,10 +19,7 @@ object Format {
 
     fun clock(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(clockFormat)
 
-    /** A night started after midnight still belongs to the previous evening. */
-    fun nightLabel(startMs: Long): String = Instant.ofEpochMilli(startMs - 6 * 3_600_000L)
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
+    fun nightLabel(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
 
     fun wake(context: Context, session: ActiveSession): String = when (session.endReason) {
         EndReason.WOKE_UP -> "got up early"
@@ -32,14 +30,30 @@ object Format {
         }
     }
 
-    fun breakdown(night: NightRecord): String {
-        val video = if (night.session.videoCounts) "counted" else "subtracted"
-        return "Screen use −${duration(night.screenUseMs)} · video ${duration(night.videoMs)} $video"
+    /** "23:18 → 07:00 (alarm, Clock)" */
+    fun entrySpan(context: Context, entry: NightRecord): String =
+        "${clock(entry.session.startMs)} → ${clock(entry.session.endMs)} (${wake(context, entry.session)})"
+
+    fun breakdown(entry: NightRecord): String {
+        val video = if (entry.session.videoCounts) "counted" else "subtracted"
+        return "Screen use −${duration(entry.screenUseMs)} · video ${duration(entry.videoMs)} $video"
     }
 
-    fun tracking(night: NightRecord): String? = when {
-        night.session.mode == TrackingMode.USAGE -> null
-        night.unmonitoredMs > 0 -> "Live tracking · ⚠ ${duration(night.unmonitoredMs)} unmonitored (app was stopped)"
+    fun breakdown(night: Night): String {
+        val video = listOfNotNull(
+            night.countedVideoMs.takeIf { it > 0 }?.let { "${duration(it)} counted" },
+            night.subtractedVideoMs.takeIf { it > 0 }?.let { "${duration(it)} subtracted" },
+        ).ifEmpty { listOf("0m") }.joinToString(", ")
+        return "Screen use −${duration(night.screenUseMs)} · video $video"
+    }
+
+    fun tracking(entry: NightRecord): String? = tracking(entry.session.mode == TrackingMode.LIVE, entry.unmonitoredMs)
+
+    fun tracking(night: Night): String? = tracking(night.live, night.unmonitoredMs)
+
+    private fun tracking(live: Boolean, unmonitoredMs: Long): String? = when {
+        !live -> null
+        unmonitoredMs > 0 -> "Live tracking · ⚠ ${duration(unmonitoredMs)} unmonitored (app was stopped)"
         else -> "Live tracking"
     }
 
@@ -50,20 +64,20 @@ object Format {
     }
 
     /** [recent] is newest first and includes [night]. */
-    fun shareText(context: Context, name: String, night: NightRecord, recent: List<NightRecord>): String {
+    fun shareText(context: Context, name: String, night: Night, recent: List<Night>): String {
         val who = if (name.isBlank()) "" else "${name.trim()} · "
-        val clipped = if (night.session.countedStartMs > night.session.startMs) {
-            "\nCounted from ${clock(night.session.countedStartMs)} (max night length)"
-        } else ""
-        val average = recent.take(7).let { nights ->
-            "\n${nights.size}-night average: ${duration(nights.sumOf { it.attemptedMs } / nights.size)}"
+        val spans = night.entries.joinToString("\n") { entry ->
+            val clipped = if (entry.session.countedStartMs > entry.session.startMs) {
+                " · counted from ${clock(entry.session.countedStartMs)}"
+            } else ""
+            entrySpan(context, entry) + clipped
         }
-        return "🌙 ${who}night of ${nightLabel(night.session.startMs)}\n" +
+        val lastWeek = recent.take(7)
+        return "🌙 ${who}night of ${nightLabel(night.date)}\n" +
             "Attempted sleep: ${duration(night.attemptedMs)}\n" +
-            "${clock(night.session.startMs)} → ${clock(night.session.endMs)} (${wake(context, night.session)})" +
-            clipped + "\n" +
+            spans + "\n" +
             breakdown(night) +
             (tracking(night)?.let { "\n$it" } ?: "") +
-            average
+            "\n${lastWeek.size}-night average: ${duration(Nights.averageMs(lastWeek))}"
     }
 }

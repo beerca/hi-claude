@@ -13,18 +13,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,7 +53,9 @@ import app.lightsout.Alarms
 import app.lightsout.Apps
 import app.lightsout.Format
 import app.lightsout.LiveTracking
+import app.lightsout.Night
 import app.lightsout.NightRecord
+import app.lightsout.Nights
 import app.lightsout.Sessions
 import app.lightsout.Store
 import app.lightsout.TrackingMode
@@ -76,7 +78,7 @@ fun HomeScreen(
     val now = remember(refreshKey) { System.currentTimeMillis() }
     val settings = remember(refreshKey) { Store.settings(context) }
     val session = remember(refreshKey) { Store.activeSession(context) }
-    val nights = remember(refreshKey) { Store.nights(context) }
+    val nights = remember(refreshKey) { Nights.group(Store.nights(context)) }
     val usageAccess = remember(refreshKey) { UsageAccess.granted(context) }
     val usageSkipped = remember(refreshKey) { Store.usageAccessSkipped(context) }
     val batteryNeeded = remember(refreshKey) {
@@ -147,10 +149,15 @@ fun HomeScreen(
             }
             if (nights.isNotEmpty()) {
                 item { Text("Past nights", style = MaterialTheme.typography.titleMedium) }
-                itemsIndexed(nights, key = { _, night -> night.session.startMs }) { index, night ->
-                    NightCard(night, onShare = {
-                        share(context, Format.shareText(context, settings.name, night, nights.drop(index)))
-                    })
+                itemsIndexed(nights, key = { _, night -> night.date.toEpochDay() }) { index, night ->
+                    NightCard(
+                        night,
+                        onShare = { share(context, Format.shareText(context, settings.name, night, nights.drop(index))) },
+                        onDelete = { entry ->
+                            Store.deleteNight(context, entry.session.startMs)
+                            onChanged()
+                        },
+                    )
                 }
             }
         }
@@ -347,24 +354,26 @@ private fun ActiveCard(session: ActiveSession, nowMs: Long, usageAccess: Boolean
     }
 }
 
+/** A night with all its entries; tap to show screen-time details and delete entries. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NightCard(night: NightRecord, onShare: () -> Unit) {
+private fun NightCard(night: Night, onShare: () -> Unit, onDelete: (NightRecord) -> Unit) {
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf<NightRecord?>(null) }
+    val multiple = night.entries.size > 1
     Card(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(Format.nightLabel(night.session.startMs), style = MaterialTheme.typography.labelLarge)
+                    Text(Format.nightLabel(night.date), style = MaterialTheme.typography.labelLarge)
                     Text(Format.duration(night.attemptedMs), style = MaterialTheme.typography.headlineMedium)
                 }
                 IconButton(onClick = onShare) { Icon(Icons.Filled.Share, contentDescription = "Share") }
             }
-            Text(
-                "${Format.clock(night.session.startMs)} → ${Format.clock(night.session.endMs)} · " +
-                    Format.wake(context, night.session),
-            )
+            night.entries.forEach { entry ->
+                Text(Format.entrySpan(context, entry) + if (multiple) " · ${Format.duration(entry.attemptedMs)}" else "")
+            }
             Text(
                 Format.breakdown(night),
                 style = MaterialTheme.typography.bodySmall,
@@ -379,18 +388,52 @@ private fun NightCard(night: NightRecord, onShare: () -> Unit) {
                 )
             }
             if (expanded) {
-                Spacer(Modifier.height(4.dp))
-                if (night.segments.isEmpty()) Text("No screen time at all.")
-                night.segments.forEach { segment ->
-                    val app = Apps.label(context, segment.packageName)?.let { " · $it" } ?: ""
-                    Text(
-                        "${Format.clock(segment.startMs)}–${Format.clock(segment.endMs)}  " +
-                            "${Format.segmentKind(segment.kind)}$app  ${Format.duration(segment.durationMs)}",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                night.entries.forEach { entry ->
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    EntryDetails(entry, showSummary = multiple, onDelete = { confirmDelete = entry })
                 }
             }
         }
+    }
+    confirmDelete?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("Delete this entry?") },
+            text = {
+                Text(
+                    "${Format.entrySpan(context, entry)}, ${Format.duration(entry.attemptedMs)} attempted sleep. " +
+                        "This can't be undone.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = null; onDelete(entry) }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Keep") } },
+        )
+    }
+}
+
+@Composable
+private fun EntryDetails(entry: NightRecord, showSummary: Boolean, onDelete: () -> Unit) {
+    val context = LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(Format.entrySpan(context, entry), style = MaterialTheme.typography.labelLarge)
+            if (showSummary) {
+                Text(Format.breakdown(entry), style = MaterialTheme.typography.bodySmall)
+                Format.tracking(entry)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        IconButton(onClick = onDelete) { Icon(Icons.Filled.Delete, contentDescription = "Delete entry") }
+    }
+    if (entry.segments.isEmpty()) Text("No screen time at all.", style = MaterialTheme.typography.bodySmall)
+    entry.segments.forEach { segment ->
+        val app = Apps.label(context, segment.packageName)?.let { " · $it" } ?: ""
+        Text(
+            "${Format.clock(segment.startMs)}–${Format.clock(segment.endMs)}  " +
+                "${Format.segmentKind(segment.kind)}$app  ${Format.duration(segment.durationMs)}",
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
